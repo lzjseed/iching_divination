@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>易经三枚铜钱占卜</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: "PingFang SC", "Microsoft Yahei", sans-serif;
+            background: #f5f5f7;
+            color: #333;
+            line-height: 1.8;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #165DFF;
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+        .btn-start {
+            background: linear-gradient(135deg, #4CAF50, #43A047);
+            color: white;
+            border: none;
+            padding: 14px 40px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+            transition: all 0.3s;
+        }
+        .btn-start:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+        .btn-start:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        .left-panel {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        .right-panel {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            max-height: 650px;
+            overflow-y: auto;
+        }
+        /* 铜钱动画 */
+        .coins-area {
+            height: 150px;
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+        .coin {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #FFE16A, #D4AF37, #8B6914);
+            border: 3px solid #6B4F00;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            position: relative;
+            animation: flip 0.7s ease-in-out infinite;
+        }
+        /* 铜钱中间方孔 */
+        .coin::after {
+            content: "";
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            background: #2D1F00;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.7);
+        }
+        .coin span {
+            position: relative;
+            z-index: 2;
+            color: #FFFFFF;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 
+                0 0 4px rgba(0,0,0,0.8),
+                0 1px 2px rgba(0,0,0,0.9);
+        }
+        .coin.stopped {
+            animation: none;
+            box-shadow: 
+                0 4px 10px rgba(139, 105, 20, 0.4),
+                inset 0 2px 4px rgba(255, 255, 200, 0.6),
+                inset 0 -2px 4px rgba(0, 0, 0, 0.3);
+        }
+        @keyframes flip {
+            0% { transform: perspective(300px) rotateY(0deg); }
+            100% { transform: perspective(300px) rotateY(360deg); }
+        }
+        /* 卦象绘制 */
+        .gua-area {
+            margin-top: 30px;
+        }
+        .gua-title {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            color: #165DFF;
+        }
+        .yao-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
+        .yao-item {
+            width: 150px;
+            height: 18px;
+            position: relative;
+        }
+        .yao-yang {
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+        .yao-yin {
+            background: linear-gradient(to right, #1a1a1a 40%, transparent 40%, transparent 60%, #1a1a1a 60%);
+            border-radius: 4px;
+        }
+        .yao-bian::after {
+            content: "";
+            position: absolute;
+            right: -30px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            border: 2px solid #FF4D4F;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .yao-bian.yin::after {
+            content: "✕";
+            color: #FF4D4F;
+            border: none;
+            font-size: 22px;
+            font-weight: bold;
+            line-height: 1;
+        }
+        .status-text {
+            text-align: center;
+            font-size: 16px;
+            color: #666;
+            margin: 15px 0;
+        }
+        /* 结果样式 */
+        .result-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #165DFF;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e8eaed;
+        }
+        .result-content {
+            font-size: 15px;
+            white-space: pre-wrap;
+            margin-bottom: 25px;
+        }
+        .yao-name {
+            font-weight: bold;
+            color: #E6A23C;
+            margin: 15px 0 8px 0;
+        }
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            h1 {
+                font-size: 22px;
+            }
+            .coin {
+                width: 60px;
+                height: 60px;
+            }
+            .coin span {
+                font-size: 18px;
+            }
+            .coin::after {
+                width: 16px;
+                height: 16px;
+            }
+        }
+    </style>
+    <script src="iching_data.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>易经三枚铜钱占卜</h1>
+            <button class="btn-start" id="startBtn" onclick="startDivination()">开始占卜</button>
+        </div>
+
+        <div class="main-grid">
+            <div class="left-panel">
+                <div class="status-text" id="status">准备就绪，点击按钮开始</div>
+                <div class="coins-area" id="coinsArea"></div>
+                <div class="gua-area">
+                    <div class="gua-title">卦象</div>
+                    <div class="yao-list" id="yaoList"></div>
+                </div>
+            </div>
+
+            <div class="right-panel" id="resultPanel">
+                <div class="result-title">解卦结果</div>
+                <div style="text-align: center; color: #999; margin-top: 50px;">
+                    占卜完成后将在此显示详细解卦内容
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 易经数据会从 iching_data.js 加载，这里先放辅助函数
+        function getLineName(idx, val) {
+            const yang_names = ["初九", "九二", "九三", "九四", "九五", "上九"];
+            const yin_names = ["初六", "六二", "六三", "六四", "六五", "上六"];
+            return [7,9].includes(val) ? yang_names[idx] : yin_names[idx];
+        }
+
+        function extractGuaText(rawText) {
+            const lines = rawText.split("\n\n");
+            const intro = [];
+            for (const line of lines) {
+                if (line.slice(0,10).includes("爻辞")) break;
+                intro.push(line);
+            }
+            return intro.join("\n\n");
+        }
+
+        function extractYaoText(rawText, lineName) {
+            const lines = rawText.split("\n\n");
+            const result = [];
+            let started = false;
+            for (const line of lines) {
+                if (line.startsWith(`${lineName}爻辞`)) {
+                    started = true;
+                    result.push(line);
+                } else if (started) {
+                    if (line.slice(0,10).includes("爻辞") || line.slice(0,10).includes("变卦")) break;
+                    result.push(line);
+                }
+            }
+            return result.join("\n\n");
+        }
+
+        let isDivining = false;
+
+        async function startDivination() {
+            if (isDivining) return;
+            isDivining = true;
+            const btn = document.getElementById('startBtn');
+            const status = document.getElementById('status');
+            const coinsArea = document.getElementById('coinsArea');
+            const yaoList = document.getElementById('yaoList');
+            const resultPanel = document.getElementById('resultPanel');
+
+            btn.disabled = true;
+            status.textContent = "正在准备投掷...";
+            yaoList.innerHTML = '';
+            resultPanel.innerHTML = '<div class="result-title">解卦结果</div><div style="text-align: center; color: #999; margin-top: 50px;">正在投掷铜钱，请稍候...</div>';
+
+            const throws = [];
+            for (let i = 0; i < 6; i++) {
+                status.textContent = `第${i+1}次投掷中...`;
+                
+                // 显示旋转的铜钱
+                coinsArea.innerHTML = `
+                    <div class="coin"></div>
+                    <div class="coin"></div>
+                    <div class="coin"></div>
+                `;
+                await new Promise(r => setTimeout(r, 800));
+
+                // 投掷结果
+                const coins = [Math.random() > 0.5 ? 2 : 3, Math.random() > 0.5 ? 2 : 3, Math.random() > 0.5 ? 2 : 3];
+                const total = coins.reduce((a,b) => a+b, 0);
+                throws.push(total);
+
+                // 停止旋转，显示结果
+                const coinsEls = coinsArea.querySelectorAll('.coin');
+                coinsEls.forEach((coin, idx) => {
+                    coin.classList.add('stopped');
+                    coin.innerHTML = `<span>${coins[idx] == 2 ? '字' : '背'}</span>`;
+                });
+                await new Promise(r => setTimeout(r, 800));
+                coinsArea.innerHTML = '';
+
+                // 绘制新的爻
+                const yao = document.createElement('div');
+                yao.className = `yao-item ${[7,9].includes(total) ? 'yao-yang' : 'yao-yin'} ${[6,9].includes(total) ? 'yao-bian' : ''} ${total ==6 ? 'yin' : ''}`;
+                // 插入到最前面，因为爻是从下往上画
+                yaoList.insertBefore(yao, yaoList.firstChild);
+            }
+
+            // 解卦
+            status.textContent = "占卜完成，正在解卦...";
+            
+            // 计算本卦
+            const ben_binary = throws.reverse().map(v => [7,9].includes(v) ? '1' : '0').join('');
+            const ben_raw = window.ichingData[ben_binary] || "";
+            const ben_name = ben_raw.includes("卦原文") ? ben_raw.split("卦原文")[0] : "未知";
+            const ben_text = extractGuaText(ben_raw);
+            
+            let html = '<div class="result-title">解卦结果</div>';
+            html += `<div class="result-title">【本卦】${ben_name}卦</div>`;
+            html += `<div class="result-content">${ben_text}</div>`;
+
+            // 处理变爻和变卦
+            const has_moving_lines = throws.some(v => [6,9].includes(v));
+            if (has_moving_lines) {
+                html += `<div class="result-title">变爻解释</div>`;
+                for (let i=0; i<throws.length; i++) {
+                    const val = throws[i];
+                    if ([6,9].includes(val)) {
+                        const lineName = getLineName(i, val);
+                        const yao_text = extractYaoText(ben_raw, lineName);
+                        html += `<div class="yao-name">${lineName}</div>`;
+                        html += `<div class="result-content">${yao_text}</div>`;
+                    }
+                }
+                
+                // 计算变卦
+                const changed_throws = throws.map(val => {
+                    if (val ==6) return 7;
+                    if (val ==9) return 8;
+                    return val;
+                });
+                const bian_binary = changed_throws.map(v => [7,9].includes(v) ? '1' : '0').join('');
+                const bian_raw = window.ichingData[bian_binary] || "";
+                const bian_name = bian_raw.includes("卦原文") ? bian_raw.split("卦原文")[0] : "未知";
+                const bian_text = extractGuaText(bian_raw);
+                
+                html += `<div class="result-title">【变卦】${bian_name}卦</div>`;
+                html += `<div class="result-content">${bian_text}</div>`;
+            } else {
+                html += `<div class="result-title">变爻</div>`;
+                html += `<div class="result-content">本卦无变爻，以本卦卦辞为准进行解读。</div>`;
+            }
+
+            resultPanel.innerHTML = html;
+            status.textContent = "占卜完成！";
+            btn.disabled = false;
+            isDivining = false;
+        }
+    </script>
+</body>
+</html>

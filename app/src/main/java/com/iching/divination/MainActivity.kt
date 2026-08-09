@@ -1,11 +1,13 @@
 package com.iching.divination
 
 import android.os.Bundle
-import android.view.WindowManager
+import androidx.activity.OnBackPressedCallback
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
@@ -14,11 +16,12 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         
-        // 隐藏状态栏，全屏显示
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_FULLSCREEN,
-            WindowManager.LayoutParams.FLAG_FULLSCREEN
-        )
+        // 隐藏状态栏，全屏显示（替代已弃用的 FLAG_FULLSCREEN）
+        WindowInsetsControllerCompat(window, window.decorView).let { controller ->
+            controller.hide(WindowInsetsCompat.Type.statusBars())
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
         
         webView = findViewById(R.id.webview)
         val webSettings: WebSettings = webView.settings
@@ -38,15 +41,18 @@ class MainActivity : AppCompatActivity() {
         
         // 加载本地静态页面
         webView.loadUrl("file:///android_asset/index.html")
-    }
 
-    // 处理返回键逻辑
-    override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
-        }
+        // 处理返回键逻辑（替代已弃用的 onBackPressed）
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
     }
 
     override fun onDestroy() {

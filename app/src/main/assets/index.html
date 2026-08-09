@@ -196,6 +196,68 @@
             color: #E6A23C;
             margin: 15px 0 8px 0;
         }
+        /* 分节小标题 */
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #165DFF;
+            margin: 14px 0 4px 0;
+            padding-left: 8px;
+            border-left: 3px solid #165DFF;
+        }
+        /* 断卦指引 */
+        .reading-note {
+            font-size: 14px;
+            color: #8C5A00;
+            background: #FFF7E6;
+            border: 1px solid #FFE7BA;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin: 8px 0 18px 0;
+            white-space: pre-wrap;
+        }
+        /* 概念释义面板 */
+        .concept-panel {
+            background: #F0F5FF;
+            border: 1px solid #D6E4FF;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+        }
+        .concept-panel-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #165DFF;
+            margin-bottom: 10px;
+        }
+        .concept-panel table { width: 100%; border-collapse: collapse; }
+        .concept-panel td { padding: 5px 6px; font-size: 13px; border-bottom: 1px dashed #D6E4FF; vertical-align: top; }
+        .concept-panel td.ck { color: #E6A23C; font-weight: bold; white-space: nowrap; width: 88px; }
+        .concept-panel td.cd { color: #555; }
+        .concept-panel td.cv { color: #165DFF; font-weight: bold; white-space: nowrap; text-align: right; }
+        /* 折叠参考区块 */
+        .gua-ref {
+            background: #FAFAFA;
+            border: 1px solid #EAECEF;
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+        }
+        .gua-ref > summary {
+            font-weight: bold;
+            color: #165DFF;
+            cursor: pointer;
+            font-size: 15px;
+            list-style: none;
+        }
+        .gua-ref > summary::before { content: "▸ "; color: #999; }
+        .gua-ref[open] > summary::before { content: "▾ "; }
+        .ref-desc {
+            font-size: 13px;
+            color: #888;
+            margin: 6px 0 4px 0;
+            font-style: italic;
+        }
         /* 移动端适配 */
         @media (max-width: 768px) {
             .main-grid {
@@ -279,6 +341,168 @@
             return result.join("\n\n");
         }
 
+        // ===== 位序与派生卦象纯函数 =====
+        // 约定：throws / yy 数组均为【从下(初爻)到上(上爻)】排列；
+        //       ichingData 的 6 位 key 为【从上爻到初爻】排列，故转 key 时需 reverse。
+        // throws 值 ∈{6,7,8,9}：6=老阴(变阳)、7=少阳、8=少阴、9=老阳(变阴)；变爻={6,9}。
+        // 归一化为阴阳 0/1 数组（1=阳），用于派生互/错/综，避免 6/9 污染（互卦为静态内因，无变爻概念）。
+        function normalizeYy(throws){ return throws.map(v => (v===7||v===9) ? 1 : 0); }
+        // 0/1 数组(从下到上) → 6 位 key(从上到下)
+        function toKey(yy){ return [...yy].reverse().join(''); }
+        function deriveBen(throws){ const yy = normalizeYy(throws); return { throws, yy, key: toKey(yy) }; }
+        function deriveBian(throws){
+            // 老阴6→少阳7、老阳9→少阴8；7/8 不变
+            const bt = throws.map(v => v===6 ? 7 : v===9 ? 8 : v);
+            const yy = normalizeYy(bt);
+            return { throws: bt, yy, key: toKey(yy) };
+        }
+        // 互卦：取本卦二三四爻为下体、三四五爻为上体（1-indexed 自下，即 0-indexed [1,2,3] 与 [2,3,4]）
+        function deriveHu(yy){ return [yy[1], yy[2], yy[3], yy[2], yy[3], yy[4]]; }
+        // 错卦：阴阳全变（旁通卦）
+        function deriveCuo(yy){ return yy.map(b => 1 - b); }
+        // 综卦：上下倒置（反卦）；自综卦自然得自身，无需特判
+        function deriveZong(yy){ return [...yy].reverse(); }
+
+        // 由原始 value 取卦名（开头"XX卦原文"中的"XX"）
+        function getGuaName(rawText){
+            return (rawText && rawText.includes("卦原文")) ? rawText.split("卦原文")[0] : "未知";
+        }
+
+        // ===== 分节解析器（标记位置法，兼容卦辞段单段多标记与爻辞段跨段两种结构） =====
+        // 注意："《象辞》说"是白话文内引用，不是分节标记，不可列入。
+        const SECTION_MARKERS = [
+            ["象曰", "象传"],
+            ["白话文解释", "白话文"],
+            ["《断易天机》解", "断易天机"],
+            ["北宋易学家邵雍解", "邵雍解"],
+            ["台湾国学大儒傅佩荣解", "傅佩荣解"],
+            ["传统解卦", "传统解卦"],
+            ["台湾张铭仁解卦", "张铭仁解"]
+        ];
+        // 将一整段(卦辞或爻辞)按子标记切分为 [{title, body}]；首节为"原文"。
+        function parseSections(text){
+            if (!text) return [];
+            const marks = SECTION_MARKERS
+                .map(([mark, title]) => ({ mark, title, pos: text.indexOf(mark) }))
+                .filter(m => m.pos >= 0)
+                .sort((a, b) => a.pos - b.pos);
+            const sections = [];
+            if (marks.length === 0) {
+                sections.push({ title: "原文", body: text.trim() });
+                return sections;
+            }
+            // 首节：开头到第一个标记之前；去掉前导"XX卦原文"或"X爻辞"标题词
+            let head = text.slice(0, marks[0].pos);
+            head = head.replace(/^[\s\S]*?(卦原文|爻辞)/, '').trim();
+            if (head) sections.push({ title: "原文", body: head });
+            marks.forEach((m, i) => {
+                const start = m.pos + m.mark.length;
+                const end = (i + 1 < marks.length) ? marks[i + 1].pos : text.length;
+                const body = text.slice(start, end).trim();
+                sections.push({ title: m.title, body });
+            });
+            return sections;
+        }
+        // 将 [{title,body}] 渲染为 html
+        function renderSections(sections){
+            if (!sections || sections.length === 0) {
+                return '<div class="result-content" style="color:#999;">（暂无数据）</div>';
+            }
+            return sections.map(s =>
+                `<div class="section-title">${s.title}</div><div class="result-content">${s.body}</div>`
+            ).join('');
+        }
+
+        // ===== 朱熹《易学启蒙·考变占》七例主断 =====
+        // 返回 { n, rule, note, blocks:[{label, sections}] }
+        function decideMainReading(throws, ben_raw, bian){
+            const bian_throws = bian.throws;
+            const bian_raw = window.ichingData[bian.key] || "";
+            const movingIdx = throws.map((v, i) => (v===6 || v===9) ? i : -1).filter(i => i >= 0);
+            const n = movingIdx.length;
+            const r = { n, rule: "", note: "", blocks: [] };
+
+            if (n === 0) {
+                r.rule = "六爻不变";
+                r.note = "六爻皆不变，以本卦卦辞断之。";
+                r.blocks.push({ label: "本卦卦辞（主断）", sections: parseSections(extractGuaText(ben_raw)) });
+            } else if (n === 1) {
+                const idx = movingIdx[0];
+                const ln = getLineName(idx, throws[idx]);
+                r.rule = "一爻变";
+                r.note = `一爻变，以本卦变爻【${ln}】爻辞断之。`;
+                r.blocks.push({ label: `${ln} 爻辞（主断）`, sections: parseSections(extractYaoText(ben_raw, ln)) });
+            } else if (n === 2) {
+                const idxs = [...movingIdx].sort((a, b) => a - b);
+                const main = idxs[1]; // 上爻为主（索引大者）
+                r.rule = "二爻变";
+                r.note = "二爻变，以本卦两变爻爻辞断之，以上爻为主。";
+                idxs.forEach(idx => {
+                    const ln = getLineName(idx, throws[idx]);
+                    r.blocks.push({ label: `${ln} 爻辞${idx===main ? "（为主）" : ""}`, sections: parseSections(extractYaoText(ben_raw, ln)) });
+                });
+            } else if (n === 3) {
+                r.rule = "三爻变";
+                r.note = "三爻变，以本卦卦辞、变卦卦辞合断之，变卦为主、本卦为辅。";
+                r.blocks.push({ label: "本卦卦辞（贞·辅）", sections: parseSections(extractGuaText(ben_raw)) });
+                r.blocks.push({ label: "变卦卦辞（悔·主）", sections: parseSections(extractGuaText(bian_raw)) });
+            } else if (n === 4) {
+                const unchanged = throws.map((v, i) => (v===7 || v===8) ? i : -1).filter(i => i >= 0); // 2 个
+                const main = Math.min(...unchanged); // 下爻为主
+                r.rule = "四爻变";
+                r.note = "四爻变，以变卦两不变爻爻辞断之，以下爻为主。";
+                [...unchanged].sort((a, b) => a - b).forEach(idx => {
+                    const ln = getLineName(idx, bian_throws[idx]);
+                    r.blocks.push({ label: `变卦·${ln} 爻辞${idx===main ? "（为主）" : ""}`, sections: parseSections(extractYaoText(bian_raw, ln)) });
+                });
+            } else if (n === 5) {
+                const unchanged = throws.map((v, i) => (v===7 || v===8) ? i : -1).filter(i => i >= 0); // 1 个
+                const idx = unchanged[0];
+                const ln = getLineName(idx, bian_throws[idx]);
+                r.rule = "五爻变";
+                r.note = "五爻变，以变卦不变爻爻辞断之。";
+                r.blocks.push({ label: `变卦·${ln} 爻辞（主断）`, sections: parseSections(extractYaoText(bian_raw, ln)) });
+            } else { // n === 6
+                const allYang = throws.every(v => v === 9);
+                const allYin = throws.every(v => v === 6);
+                r.rule = "六爻全变";
+                if (allYang) {
+                    r.note = "本卦为乾，六爻皆老阳而变，按朱熹《易学启蒙·考变占》之例，以乾卦「用九」爻辞断之。";
+                    r.blocks.push({ label: "用九 爻辞（主断）", sections: parseSections(extractYaoText(ben_raw, "用九")) });
+                } else if (allYin) {
+                    r.note = "本卦为坤，六爻皆老阴而变，按朱熹《易学启蒙·考变占》之例，以坤卦「用六」爻辞断之。";
+                    r.blocks.push({ label: "用六 爻辞（主断）", sections: parseSections(extractYaoText(ben_raw, "用六")) });
+                } else {
+                    r.note = "六爻全变，以变卦卦辞断之。";
+                    r.blocks.push({ label: "变卦卦辞（主断）", sections: parseSections(extractGuaText(bian_raw)) });
+                }
+            }
+            return r;
+        }
+
+        // 概念释义面板
+        function renderConceptPanel(reading, ben, bian, hu, cuo, zong, zongSelf){
+            const bianCell = reading.n === 0 ? "—（无变爻）" : bian;
+            const yaoCell = reading.n === 0 ? "0 爻（无变）" : `${reading.n} 爻`;
+            const rows = [
+                ["本卦（贞）", "所占当下之现状、起因", ben],
+                ["变卦（之）", "事态发展之趋向、结果", bianCell],
+                ["变爻", "变动之枢机、吉凶转换之关键", yaoCell],
+                ["互卦", "事物内因与中间过程", hu],
+                ["错卦", "对立面、另一可能", cuo],
+                ["综卦", "换位思考、立场反转", zongSelf ? `${zong}（自综）` : zong]
+            ];
+            let html = '<div class="concept-panel">';
+            html += '<div class="concept-panel-title">概念释义</div>';
+            html += '<table><tbody>';
+            rows.forEach(([k, d, v]) => {
+                html += `<tr><td class="ck">${k}</td><td class="cd">${d}</td><td class="cv">${v}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            html += '</div>';
+            return html;
+        }
+
         let isDivining = false;
 
         async function startDivination() {
@@ -331,47 +555,48 @@
             // 解卦
             status.textContent = "占卜完成，正在解卦...";
             
-            // 计算本卦
-            const ben_binary = throws.reverse().map(v => [7,9].includes(v) ? '1' : '0').join('');
-            const ben_raw = window.ichingData[ben_binary] || "";
-            const ben_name = ben_raw.includes("卦原文") ? ben_raw.split("卦原文")[0] : "未知";
-            const ben_text = extractGuaText(ben_raw);
-            
-            let html = '<div class="result-title">解卦结果</div>';
-            html += `<div class="result-title">【本卦】${ben_name}卦</div>`;
-            html += `<div class="result-content">${ben_text}</div>`;
+            // 派生本卦/变卦/互卦/错卦/综卦（均基于 throws，从下到上；toKey 内部 reverse 成 key 的从上到下）
+            const ben = deriveBen(throws);
+            const bian = deriveBian(throws);
+            const hu_key = toKey(deriveHu(ben.yy));
+            const cuo_key = toKey(deriveCuo(ben.yy));
+            const zong_key = toKey(deriveZong(ben.yy));
+            const ben_raw = window.ichingData[ben.key] || "";
+            const bian_raw = window.ichingData[bian.key] || "";
+            const hu_raw = window.ichingData[hu_key] || "";
+            const cuo_raw = window.ichingData[cuo_key] || "";
+            const zong_raw = window.ichingData[zong_key] || "";
+            const ben_name = getGuaName(ben_raw);
+            const bian_name = getGuaName(bian_raw);
+            const hu_name = getGuaName(hu_raw);
+            const cuo_name = getGuaName(cuo_raw);
+            const zong_name = getGuaName(zong_raw);
+            const zong_is_self = (zong_key === ben.key);
 
-            // 处理变爻和变卦
-            const has_moving_lines = throws.some(v => [6,9].includes(v));
-            if (has_moving_lines) {
-                html += `<div class="result-title">变爻解释</div>`;
-                for (let i=0; i<throws.length; i++) {
-                    const val = throws[i];
-                    if ([6,9].includes(val)) {
-                        const lineName = getLineName(i, val);
-                        const yao_text = extractYaoText(ben_raw, lineName);
-                        html += `<div class="yao-name">${lineName}</div>`;
-                        html += `<div class="result-content">${yao_text}</div>`;
-                    }
-                }
-                
-                // 计算变卦
-                const changed_throws = throws.map(val => {
-                    if (val ==6) return 7;
-                    if (val ==9) return 8;
-                    return val;
-                });
-                const bian_binary = changed_throws.map(v => [7,9].includes(v) ? '1' : '0').join('');
-                const bian_raw = window.ichingData[bian_binary] || "";
-                const bian_name = bian_raw.includes("卦原文") ? bian_raw.split("卦原文")[0] : "未知";
-                const bian_text = extractGuaText(bian_raw);
-                
-                html += `<div class="result-title">【变卦】${bian_name}卦</div>`;
-                html += `<div class="result-content">${bian_text}</div>`;
-            } else {
-                html += `<div class="result-title">变爻</div>`;
-                html += `<div class="result-content">本卦无变爻，以本卦卦辞为准进行解读。</div>`;
+            // 朱熹《易学启蒙·考变占》七例主断
+            const reading = decideMainReading(throws, ben_raw, bian);
+
+            let html = '<div class="result-title">解卦结果</div>';
+
+            // 1. 概念释义面板：本卦/变卦/变爻/互卦/错卦/综卦 含义 + 本次变爻数
+            html += renderConceptPanel(reading, ben_name, bian_name, hu_name, cuo_name, zong_name, zong_is_self);
+
+            // 2. 主断：按变爻数选定的文本，分节小标题展示
+            html += `<div class="result-title">主断 · ${reading.rule}（${reading.n} 爻变）</div>`;
+            html += `<div class="reading-note">${reading.note}</div>`;
+            reading.blocks.forEach(b => {
+                html += `<div class="yao-name">${b.label}</div>`;
+                html += renderSections(b.sections);
+            });
+
+            // 3. 参考卦象（折叠）：本卦全文 / 变卦全文 / 互卦 / 错卦 / 综卦
+            html += `<details class="gua-ref"><summary>【本卦】${ben_name}卦 · 全文</summary>${renderSections(parseSections(extractGuaText(ben_raw)))}</details>`;
+            if (reading.n > 0) {
+                html += `<details class="gua-ref"><summary>【变卦】${bian_name}卦 · 全文</summary>${renderSections(parseSections(extractGuaText(bian_raw)))}</details>`;
             }
+            html += `<details class="gua-ref"><summary>【互卦】${hu_name}卦 · 事物内因</summary><div class="ref-desc">取本卦二三四爻为下体、三四五爻为上体，揭示事物发展的内在因素与中间过程。</div>${renderSections(parseSections(extractGuaText(hu_raw)))}</details>`;
+            html += `<details class="gua-ref"><summary>【错卦】${cuo_name}卦 · 对立面</summary><div class="ref-desc">阴阳全变（旁通卦），反映事物的对立面与另一种可能。</div>${renderSections(parseSections(extractGuaText(cuo_raw)))}</details>`;
+            html += `<details class="gua-ref"><summary>【综卦】${zong_name}卦${zong_is_self ? "（自综）" : ""} · 换位</summary><div class="ref-desc">上下倒置（反卦），反映换位思考、立场反转。</div>${renderSections(parseSections(extractGuaText(zong_raw)))}</details>`;
 
             resultPanel.innerHTML = html;
             status.textContent = "占卜完成！";

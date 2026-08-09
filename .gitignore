@@ -6,8 +6,12 @@ app/build/
 
 # IDE files
 .idea/
+.trae/
 *.iml
 .DS_Store
+
+# Local reference docs (not for upload)
+docs/
 
 # Local configuration
 local.properties
